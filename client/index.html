@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Contact Tracker</title>
+    <meta name="description" content="A private contact tracker for names, social links, notes, avatars, sorting, and search." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <div class="nav-dropdown">
+      <button class="nav-toggle" id="menuToggle" type="button" aria-expanded="false">MENU</button>
+      <div class="nav-panel" id="navPanel" aria-hidden="true">
+        <button class="nav-item" id="navAddContact" type="button">+ NEW CONTACT</button>
+        <button class="nav-item" id="navRefresh" type="button">REFRESH DATA</button>
+        <button class="nav-item" id="navAccess" type="button">ACCESS TOKEN</button>
+      </div>
+    </div>
+
+    <main class="container">
+      <section class="main-card hero-card">
+        <div class="main-card-header">
+          <div class="header-left">
+            <p class="console-line"><span class="console-ts" id="clockStamp">--:--:--</span><span class="console-info">CONTACT OPS / NETWORK DATABASE</span></p>
+            <h1>Contact Tracker</h1>
+            <p class="subtitle">Save contacts, social links, brief notes, avatars, tags, follow-up status, and searchable relationship context.</p>
+          </div>
+          <div class="system-badge" id="systemBadge">SYNCING</div>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+          <article class="stat-card">
+            <span class="stat-label">TOTAL CONTACTS</span>
+            <strong class="stat-value" id="statTotal">0</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">WATCHLIST</span>
+            <strong class="stat-value" id="statWatchlist">0</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">FOLLOW-UP</span>
+            <strong class="stat-value" id="statFollowup">0</strong>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">HIGH PRIORITY</span>
+            <strong class="stat-value" id="statHigh">0</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="controls-row">
+        <div class="search-card">
+          <label for="searchInput">SEARCH</label>
+          <input id="searchInput" class="search-input" type="search" placeholder="Search names, social links, notes, tags, company..." autocomplete="off" />
+        </div>
+
+        <div class="search-card filter-card">
+          <div class="filter-grid">
+            <div>
+              <label for="sortSelect">SORT</label>
+              <select id="sortSelect">
+                <option value="recent">Newest created</option>
+                <option value="updated">Recently updated</option>
+                <option value="name_asc">Name A-Z</option>
+                <option value="name_desc">Name Z-A</option>
+                <option value="priority">Priority high-low</option>
+                <option value="followup">Next follow-up</option>
+                <option value="oldest">Oldest created</option>
+              </select>
+            </div>
+            <div>
+              <label for="statusFilter">STATUS</label>
+              <select id="statusFilter">
+                <option value="all">All statuses</option>
+                <option value="new">New</option>
+                <option value="active">Active</option>
+                <option value="watchlist">Watchlist</option>
+                <option value="follow-up">Follow-up</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+            <div>
+              <label for="priorityFilter">PRIORITY</label>
+              <select id="priorityFilter">
+                <option value="all">All priorities</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label for="cardSizeSelect">CARD SIZE</label>
+              <select id="cardSizeSelect">
+                <option value="medium">Medium</option>
+                <option value="small">Small</option>
+                <option value="large">Large</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="main-card profiles-card">
+        <div class="profiles-card-header">
+          <div>
+            <h2 class="section-title">CONTACT CARDS</h2>
+            <p class="section-subtitle" id="resultSummary">No contacts loaded yet.</p>
+          </div>
+          <button class="primary compact" id="addContactBtn" type="button">ADD CONTACT</button>
+        </div>
+        <div id="contactsGrid" class="profiles-grid size-medium"></div>
+        <div id="emptyState" class="empty-state" hidden>
+          <div class="empty-state-icon">◌</div>
+          <div class="empty-state-text">No contacts found</div>
+          <p class="empty-state-hint">Add a contact or adjust the search/filter controls.</p>
+        </div>
+      </section>
+    </main>
+
+    <div class="modal" id="contactModal" aria-hidden="true">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title" id="modalTitle">New Contact</h2>
+          <button class="close" id="closeContactModal" type="button" aria-label="Close">×</button>
+        </div>
+
+        <form id="contactForm">
+          <input type="hidden" id="contactId" />
+          <input type="hidden" id="avatarDataUrl" />
+
+          <div class="avatar-editor">
+            <div class="avatar-preview" id="avatarPreview">?</div>
+            <div class="avatar-controls">
+              <label for="avatarInput">AVATAR</label>
+              <input id="avatarInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+              <p class="help-text">Images are resized in-browser before saving to MongoDB.</p>
+              <button id="clearAvatarBtn" class="secondary small-btn" type="button">CLEAR AVATAR</button>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="nameInput">NAME *</label>
+              <input id="nameInput" type="text" required placeholder="Jane Doe" />
+            </div>
+            <div class="form-group">
+              <label for="titleInput">TITLE / ROLE</label>
+              <input id="titleInput" type="text" placeholder="Promoter, DJ, designer, buyer..." />
+            </div>
+            <div class="form-group">
+              <label for="companyInput">COMPANY / CREW</label>
+              <input id="companyInput" type="text" placeholder="Company, venue, label, group..." />
+            </div>
+            <div class="form-group">
+              <label for="locationInput">LOCATION</label>
+              <input id="locationInput" type="text" placeholder="Columbus, OH" />
+            </div>
+            <div class="form-group">
+              <label for="emailInput">EMAIL</label>
+              <input id="emailInput" type="email" placeholder="name@example.com" />
+            </div>
+            <div class="form-group">
+              <label for="phoneInput">PHONE</label>
+              <input id="phoneInput" type="text" placeholder="(555) 555-5555" />
+            </div>
+            <div class="form-group">
+              <label for="statusInput">STATUS</label>
+              <select id="statusInput">
+                <option value="new">New</option>
+                <option value="active" selected>Active</option>
+                <option value="watchlist">Watchlist</option>
+                <option value="follow-up">Follow-up</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="priorityInput">PRIORITY</label>
+              <select id="priorityInput">
+                <option value="high">High</option>
+                <option value="medium" selected>Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="lastContactedInput">LAST CONTACTED</label>
+              <input id="lastContactedInput" type="date" />
+            </div>
+            <div class="form-group">
+              <label for="nextFollowUpInput">NEXT FOLLOW-UP</label>
+              <input id="nextFollowUpInput" type="date" />
+            </div>
+            <div class="form-group form-group-full">
+              <label for="websiteInput">WEBSITE</label>
+              <input id="websiteInput" type="text" placeholder="https://example.com" />
+            </div>
+            <div class="form-group form-group-full">
+              <label for="socialLinksInput">SOCIAL MEDIA LINKS</label>
+              <textarea id="socialLinksInput" placeholder="Instagram | instagram.com/name&#10;Facebook | facebook.com/name&#10;LinkedIn | linkedin.com/in/name"></textarea>
+              <p class="help-text">Use one link per line. Optional format: Label | URL</p>
+            </div>
+            <div class="form-group form-group-full">
+              <label for="tagsInput">TAGS</label>
+              <input id="tagsInput" type="text" placeholder="sponsor, venue, artist, vip" />
+            </div>
+            <div class="form-group form-group-full">
+              <label for="notesInput">BRIEF NOTES</label>
+              <textarea id="notesInput" placeholder="Where you met, what they do, follow-up context, important details..."></textarea>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="primary" type="submit" id="saveContactBtn">SAVE CONTACT</button>
+            <button class="secondary" type="button" id="cancelContactBtn">CANCEL</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal" id="viewModal" aria-hidden="true">
+      <div class="modal-content expanded-modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title">Contact Detail</h2>
+          <button class="close" id="closeViewModal" type="button" aria-label="Close">×</button>
+        </div>
+        <div id="expandedContact"></div>
+      </div>
+    </div>
+
+    <div class="modal access-modal" id="accessModal" aria-hidden="true">
+      <div class="modal-content token-card">
+        <div class="modal-header">
+          <h2 class="modal-title">Access Token</h2>
+          <button class="close" id="closeAccessModal" type="button" aria-label="Close">×</button>
+        </div>
+        <p class="subtitle">Enter the ADMIN_TOKEN value configured in Railway to unlock your private contact database.</p>
+        <div class="form-group">
+          <label for="accessTokenInput">TOKEN</label>
+          <input id="accessTokenInput" type="password" placeholder="Paste ADMIN_TOKEN" autocomplete="off" />
+        </div>
+        <div class="form-actions">
+          <button class="primary" id="saveAccessToken" type="button">SAVE TOKEN</button>
+          <button class="secondary" id="clearAccessToken" type="button">CLEAR</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/js/app.js"></script>
+  </body>
+</html>
