@@ -62,6 +62,7 @@ const clientDir = resolveClientDir();
 const clientIndex = path.join(clientDir, "index.html");
 
 app.use(express.static(clientDir));
+app.use("/assets", express.static(path.join(clientDir, "assets")));
 app.use("/css", express.static(path.join(clientDir, "css")));
 app.use("/js", express.static(path.join(clientDir, "js")));
 app.get("/favicon.ico", (_req, res) => res.status(204).end());
