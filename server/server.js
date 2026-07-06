@@ -65,7 +65,7 @@ app.use(express.static(clientDir));
 app.use("/assets", express.static(path.join(clientDir, "assets")));
 app.use("/css", express.static(path.join(clientDir, "css")));
 app.use("/js", express.static(path.join(clientDir, "js")));
-app.get("/favicon.ico", (_req, res) => res.status(204).end());
+app.get("/favicon.ico", (_req, res) => res.sendFile(path.join(clientDir, "assets", "contact.png")));
 
 app.use("/api/contacts", contactsRouter);
 

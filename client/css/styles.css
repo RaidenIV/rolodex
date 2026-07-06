@@ -117,41 +117,30 @@ label {
   top: 20px;
   right: 20px;
   z-index: 900;
-  display: grid;
-  place-items: center;
-  width: 92px;
-  height: 42px;
-  padding: 6px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  background: rgba(19, 19, 22, 0.95);
-  backdrop-filter: blur(20px);
+  display: block;
+  width: 138px;
+  height: auto;
 }
 
 .aigox-logo img {
   display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
   object-fit: contain;
-}
-
-.xodia-logo-wrap {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
 }
 
 .xodia-logo {
   display: block;
-  width: min(150px, 42vw);
+  width: min(150px, 24vw);
   height: auto;
   object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .container {
   max-width: 1600px;
   margin: 0 auto;
-  padding-top: 92px;
+  padding-top: 0;
 }
 
 .main-card,
@@ -166,6 +155,8 @@ label {
   margin-bottom: 24px;
 }
 
+.hero-card { position: relative; }
+
 .main-card-header {
   display: flex;
   align-items: flex-start;
@@ -179,6 +170,11 @@ label {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.header-left .system-badge {
+  align-self: flex-start;
+  margin-bottom: 4px;
 }
 
 .console-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -680,8 +676,15 @@ h1 {
   padding: 0;
   border-radius: 14px;
   background: rgba(19, 19, 22, 0.95);
-  border-color: rgba(0, 153, 255, 0.2);
+  border-color: var(--line);
+  color: var(--text);
   backdrop-filter: blur(20px);
+}
+
+.nav-toggle:hover {
+  background: rgba(0, 153, 255, 0.08);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .nav-toggle::before {
@@ -749,14 +752,14 @@ a.nav-item { display: block; text-decoration: none; }
 
 @media (max-width: 700px) {
   body { padding: 12px; }
-  .container { padding-top: 78px; }
+  .container { padding-top: 0; }
   .nav-dropdown { top: 12px; left: 12px; }
-  .aigox-logo { top: 12px; right: 12px; width: 78px; height: 36px; }
-  .xodia-logo-wrap { margin-bottom: 16px; }
-  .xodia-logo { width: min(100px, 38vw); }
+  .aigox-logo { top: 12px; right: 12px; width: 117px; height: auto; }
+  .xodia-logo { width: min(100px, 32vw); }
   .main-card { padding: 16px; }
   .main-card-header,
   .profiles-card-header { flex-direction: column; align-items: stretch; }
+  .hero-card .main-card-header { flex-direction: row; align-items: flex-start; }
   .filter-grid,
   .form-grid,
   .stats-grid,

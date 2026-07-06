@@ -7,7 +7,6 @@ const state = {
 };
 
 const els = {
-  clockStamp: document.getElementById('clockStamp'),
   systemBadge: document.getElementById('systemBadge'),
   menuToggle: document.getElementById('menuToggle'),
   navPanel: document.getElementById('navPanel'),
@@ -63,10 +62,6 @@ const els = {
   toast: document.getElementById('toast')
 };
 
-function setClock() {
-  const now = new Date();
-  els.clockStamp.textContent = now.toLocaleTimeString([], { hour12: false });
-}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -671,8 +666,6 @@ function wireEvents() {
 }
 
 async function init() {
-  setClock();
-  window.setInterval(setClock, 1000);
   wireEvents();
   await checkHealth();
   if (!state.tokenRequired || state.token) await loadContacts();
