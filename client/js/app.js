@@ -626,6 +626,13 @@ function wireEvents() {
     if (action === 'delete') deleteContact(id);
   });
 
+  els.contactsGrid.addEventListener('dblclick', (event) => {
+    if (event.target.closest('button, a, input, select, textarea')) return;
+    const card = event.target.closest('.contact-card');
+    if (!card?.dataset?.id) return;
+    openViewModal(card.dataset.id);
+  });
+
   els.expandedContact.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-view-action]');
     if (!button) return;
