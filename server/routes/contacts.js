@@ -70,6 +70,40 @@ function sanitizeBody(body) {
   };
 }
 
+
+function normalizeImportedStatus(value) {
+  const normalized = String(value || "active").trim().toLowerCase().replace(/[\s_]+/g, "-");
+  if (normalized === "followup") return "follow-up";
+  return ["new", "active", "watchlist", "follow-up", "archived"].includes(normalized) ? normalized : "active";
+}
+
+function normalizeImportedPriority(value) {
+  const normalized = String(value || "medium").trim().toLowerCase();
+  return ["low", "medium", "high"].includes(normalized) ? normalized : "medium";
+}
+
+function normalizedEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizedPhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function duplicateKeys(contact) {
+  const keys = [];
+  const email = normalizedEmail(contact.email);
+  const phone = normalizedPhone(contact.phone);
+  const name = String(contact.name || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const company = String(contact.company || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+  if (email) keys.push(`email:${email}`);
+  if (phone.length >= 7) keys.push(`phone:${phone}`);
+  if (name && company) keys.push(`name-company:${name}|${company}`);
+
+  return keys;
+}
+
 function getSort(sortKey) {
   switch (sortKey) {
     case "name_desc":
@@ -151,6 +185,71 @@ router.get("/stats", async (_req, res, next) => {
     ]);
 
     res.json({ total, statuses: statusRows, priorities: priorityRows, tags: tagsAgg });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+router.post("/import", async (req, res, next) => {
+  try {
+    const contacts = Array.isArray(req.body?.contacts) ? req.body.contacts : [];
+    const skipDuplicates = req.body?.skipDuplicates !== false;
+
+    if (!contacts.length) return res.status(400).json({ error: "No contacts were provided for import" });
+    if (contacts.length > 500) return res.status(400).json({ error: "A maximum of 500 contacts can be imported at one time" });
+
+    const seenKeys = new Set();
+    if (skipDuplicates) {
+      const existingContacts = await Contact.find({}, { name: 1, company: 1, email: 1, phone: 1 }).lean();
+      existingContacts.forEach((contact) => duplicateKeys(contact).forEach((key) => seenKeys.add(key)));
+    }
+
+    const validDocs = [];
+    const errors = [];
+    let duplicates = 0;
+
+    for (let index = 0; index < contacts.length; index += 1) {
+      const source = contacts[index] || {};
+      const rowNumber = Number.isInteger(Number(source._csvRow)) ? Number(source._csvRow) : index + 2;
+      const payload = sanitizeBody(source);
+      payload.status = normalizeImportedStatus(source.status);
+      payload.priority = normalizeImportedPriority(source.priority);
+      payload.avatarDataUrl = "";
+
+      if (!payload.name) {
+        errors.push({ row: rowNumber, error: "Name is required" });
+        continue;
+      }
+
+      const keys = duplicateKeys(payload);
+      if (skipDuplicates && keys.some((key) => seenKeys.has(key))) {
+        duplicates += 1;
+        continue;
+      }
+
+      try {
+        const doc = new Contact(payload);
+        await doc.validate();
+        validDocs.push(doc);
+        if (skipDuplicates) keys.forEach((key) => seenKeys.add(key));
+      } catch (err) {
+        errors.push({ row: rowNumber, error: err.message });
+      }
+    }
+
+    let imported = 0;
+    if (validDocs.length) {
+      const inserted = await Contact.insertMany(validDocs.map((doc) => doc.toObject()), { ordered: false });
+      imported = inserted.length;
+    }
+
+    res.status(imported ? 201 : 200).json({
+      imported,
+      duplicates,
+      invalid: errors.length,
+      errors: errors.slice(0, 25)
+    });
   } catch (err) {
     next(err);
   }

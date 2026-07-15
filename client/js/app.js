@@ -3,7 +3,9 @@ const state = {
   stats: null,
   token: localStorage.getItem('contactTrackerAccessToken') || '',
   tokenRequired: false,
-  activeToastTimer: null
+  activeToastTimer: null,
+  csvImportRows: [],
+  csvImportErrors: []
 };
 
 const els = {
@@ -11,9 +13,11 @@ const els = {
   menuToggle: document.getElementById('menuToggle'),
   navPanel: document.getElementById('navPanel'),
   navAddContact: document.getElementById('navAddContact'),
+  navImportCsv: document.getElementById('navImportCsv'),
   navRefresh: document.getElementById('navRefresh'),
   navAccess: document.getElementById('navAccess'),
   addContactBtn: document.getElementById('addContactBtn'),
+  importCsvBtn: document.getElementById('importCsvBtn'),
   contactsGrid: document.getElementById('contactsGrid'),
   emptyState: document.getElementById('emptyState'),
   resultSummary: document.getElementById('resultSummary'),
@@ -29,11 +33,13 @@ const els = {
   contactModal: document.getElementById('contactModal'),
   viewModal: document.getElementById('viewModal'),
   accessModal: document.getElementById('accessModal'),
+  importModal: document.getElementById('importModal'),
   contactForm: document.getElementById('contactForm'),
   modalTitle: document.getElementById('modalTitle'),
   closeContactModal: document.getElementById('closeContactModal'),
   closeViewModal: document.getElementById('closeViewModal'),
   closeAccessModal: document.getElementById('closeAccessModal'),
+  closeImportModal: document.getElementById('closeImportModal'),
   cancelContactBtn: document.getElementById('cancelContactBtn'),
   saveContactBtn: document.getElementById('saveContactBtn'),
   contactId: document.getElementById('contactId'),
@@ -59,6 +65,16 @@ const els = {
   accessTokenInput: document.getElementById('accessTokenInput'),
   saveAccessToken: document.getElementById('saveAccessToken'),
   clearAccessToken: document.getElementById('clearAccessToken'),
+  csvFileInput: document.getElementById('csvFileInput'),
+  downloadCsvTemplate: document.getElementById('downloadCsvTemplate'),
+  csvFileSummary: document.getElementById('csvFileSummary'),
+  duplicateBehavior: document.getElementById('duplicateBehavior'),
+  csvImportPreview: document.getElementById('csvImportPreview'),
+  csvPreviewSummary: document.getElementById('csvPreviewSummary'),
+  csvPreviewBody: document.getElementById('csvPreviewBody'),
+  csvImportErrors: document.getElementById('csvImportErrors'),
+  confirmCsvImport: document.getElementById('confirmCsvImport'),
+  cancelCsvImport: document.getElementById('cancelCsvImport'),
   toast: document.getElementById('toast')
 };
 
@@ -563,10 +579,367 @@ async function handleAvatarChange(event) {
   }
 }
 
+
+const CSV_TEMPLATE_HEADERS = [
+  'name',
+  'title',
+  'company',
+  'location',
+  'email',
+  'phone',
+  'website',
+  'instagram',
+  'facebook',
+  'linkedin',
+  'tiktok',
+  'x',
+  'tags',
+  'notes',
+  'status',
+  'priority',
+  'lastContacted',
+  'nextFollowUp'
+];
+
+const CSV_HEADER_ALIASES = {
+  name: ['name', 'fullname', 'contactname', 'displayname'],
+  firstName: ['firstname', 'first', 'givenname'],
+  lastName: ['lastname', 'last', 'surname', 'familyname'],
+  title: ['title', 'role', 'jobtitle', 'position', 'organizationtitle', 'organization1title'],
+  company: ['company', 'companycrew', 'crew', 'organization', 'organizationname', 'organization1name'],
+  location: ['location', 'city', 'address', 'formattedaddress', 'address1formatted'],
+  email: ['email', 'emailaddress', 'email1value', 'primaryemail'],
+  phone: ['phone', 'phonenumber', 'mobile', 'mobilephone', 'phone1value', 'primaryphone'],
+  website: ['website', 'url', 'website1value'],
+  socialLinks: ['sociallinks', 'socialmedia', 'socialmedialinks', 'socials'],
+  instagram: ['instagram', 'instagramurl', 'ig'],
+  facebook: ['facebook', 'facebookurl', 'fb'],
+  linkedin: ['linkedin', 'linkedinurl'],
+  tiktok: ['tiktok', 'tiktokurl'],
+  x: ['x', 'xurl', 'twitter', 'twitterurl'],
+  youtube: ['youtube', 'youtubeurl'],
+  soundcloud: ['soundcloud', 'soundcloudurl'],
+  tags: ['tags', 'tag', 'labels', 'categories'],
+  notes: ['notes', 'note', 'description', 'comments'],
+  status: ['status', 'contactstatus'],
+  priority: ['priority', 'contactpriority'],
+  lastContactedAt: ['lastcontacted', 'lastcontactedat', 'lastcontactdate'],
+  nextFollowUpAt: ['nextfollowup', 'nextfollowupat', 'followupdate', 'nextcontactdate']
+};
+
+function normalizeCsvHeader(value) {
+  return String(value || '')
+    .replace(/^\uFEFF/, '')
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function resolveCsvHeader(value) {
+  const normalized = normalizeCsvHeader(value);
+  for (const [field, aliases] of Object.entries(CSV_HEADER_ALIASES)) {
+    if (aliases.includes(normalized)) return field;
+  }
+
+  if (/^email\d*(value|address)$/.test(normalized)) return 'email';
+  if (/^phone\d*(value|number)$/.test(normalized)) return 'phone';
+  if (/^website\d*value$/.test(normalized)) return 'website';
+  if (/^organization\d*name$/.test(normalized)) return 'company';
+  if (/^organization\d*title$/.test(normalized)) return 'title';
+  if (/^address\d*formatted$/.test(normalized)) return 'location';
+  return '';
+}
+
+function countDelimiterOutsideQuotes(line, delimiter) {
+  let count = 0;
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"') {
+      if (quoted && line[index + 1] === '"') index += 1;
+      else quoted = !quoted;
+    } else if (!quoted && char === delimiter) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function detectCsvDelimiter(text) {
+  const firstLine = String(text || '').split(/\r?\n/, 1)[0] || '';
+  const candidates = [',', '\t', ';'];
+  return candidates
+    .map((delimiter) => ({ delimiter, count: countDelimiterOutsideQuotes(firstLine, delimiter) }))
+    .sort((a, b) => b.count - a.count)[0]?.delimiter || ',';
+}
+
+function parseCsv(text) {
+  const source = String(text || '').replace(/^\uFEFF/, '');
+  const delimiter = detectCsvDelimiter(source);
+  const rows = [];
+  let row = [];
+  let field = '';
+  let quoted = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (quoted) {
+      if (char === '"') {
+        if (source[index + 1] === '"') {
+          field += '"';
+          index += 1;
+        } else {
+          quoted = false;
+        }
+      } else {
+        field += char;
+      }
+      continue;
+    }
+
+    if (char === '"' && field === '') {
+      quoted = true;
+    } else if (char === delimiter) {
+      row.push(field);
+      field = '';
+    } else if (char === '\n') {
+      row.push(field);
+      if (row.some((value) => String(value).trim())) rows.push(row);
+      row = [];
+      field = '';
+    } else if (char !== '\r') {
+      field += char;
+    }
+  }
+
+  if (quoted) throw new Error('The CSV contains an unclosed quoted field.');
+
+  row.push(field);
+  if (row.some((value) => String(value).trim())) rows.push(row);
+  return rows;
+}
+
+function splitCsvList(value) {
+  return String(value || '')
+    .split(/[\n,;|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseCsvSocialLinks(value) {
+  return String(value || '')
+    .split(/\r?\n|;/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      if (!item.includes('|')) {
+        const url = normalizeUrlInput(item);
+        return { label: hostLabel(url), url };
+      }
+      const [label, ...rest] = item.split('|');
+      const url = normalizeUrlInput(rest.join('|').trim());
+      return { label: label.trim() || hostLabel(url), url };
+    })
+    .filter((link) => link.url);
+}
+
+function normalizeImportedStatus(value) {
+  const normalized = String(value || 'active').trim().toLowerCase().replace(/[\s_]+/g, '-');
+  if (normalized === 'followup') return 'follow-up';
+  return ['new', 'active', 'watchlist', 'follow-up', 'archived'].includes(normalized) ? normalized : 'active';
+}
+
+function normalizeImportedPriority(value) {
+  const normalized = String(value || 'medium').trim().toLowerCase();
+  return ['low', 'medium', 'high'].includes(normalized) ? normalized : 'medium';
+}
+
+function csvRowToContact(headers, values, rowNumber) {
+  const raw = {};
+  headers.forEach((header, index) => {
+    if (!header || raw[header]) return;
+    raw[header] = String(values[index] || '').trim();
+  });
+
+  const name = raw.name || [raw.firstName, raw.lastName].filter(Boolean).join(' ').trim();
+  if (!name) return { error: `Row ${rowNumber}: missing a name.` };
+
+  const socialLinks = parseCsvSocialLinks(raw.socialLinks);
+  [
+    ['Instagram', raw.instagram],
+    ['Facebook', raw.facebook],
+    ['LinkedIn', raw.linkedin],
+    ['TikTok', raw.tiktok],
+    ['X', raw.x],
+    ['YouTube', raw.youtube],
+    ['SoundCloud', raw.soundcloud]
+  ].forEach(([label, value]) => {
+    if (!value) return;
+    const url = normalizeUrlInput(value);
+    if (url) socialLinks.push({ label, url });
+  });
+
+  return {
+    contact: {
+      _csvRow: rowNumber,
+      name,
+      title: raw.title || '',
+      company: raw.company || '',
+      location: raw.location || '',
+      email: raw.email || '',
+      phone: raw.phone || '',
+      website: normalizeUrlInput(raw.website),
+      socialLinks,
+      tags: splitCsvList(raw.tags),
+      notes: raw.notes || '',
+      status: normalizeImportedStatus(raw.status),
+      priority: normalizeImportedPriority(raw.priority),
+      lastContactedAt: raw.lastContactedAt || null,
+      nextFollowUpAt: raw.nextFollowUpAt || null
+    }
+  };
+}
+
+function resetCsvImport() {
+  state.csvImportRows = [];
+  state.csvImportErrors = [];
+  els.csvFileInput.value = '';
+  els.csvFileSummary.textContent = 'No CSV file selected.';
+  els.csvImportPreview.hidden = true;
+  els.csvPreviewSummary.textContent = 'No rows ready.';
+  els.csvPreviewBody.innerHTML = '';
+  els.csvImportErrors.hidden = true;
+  els.csvImportErrors.innerHTML = '';
+  els.confirmCsvImport.disabled = true;
+  els.confirmCsvImport.textContent = 'IMPORT CONTACTS';
+  els.duplicateBehavior.value = 'skip';
+}
+
+function openImportModal() {
+  resetCsvImport();
+  openModal(els.importModal);
+}
+
+function renderCsvPreview() {
+  const rows = state.csvImportRows;
+  const errors = state.csvImportErrors;
+  els.csvImportPreview.hidden = false;
+  els.csvPreviewSummary.textContent = `${rows.length} valid contact${rows.length === 1 ? '' : 's'} ready${errors.length ? `; ${errors.length} row${errors.length === 1 ? '' : 's'} skipped` : ''}.`;
+  els.csvPreviewBody.innerHTML = rows.slice(0, 20).map((contact) => `
+    <tr>
+      <td>${escapeHtml(contact.name)}</td>
+      <td>${escapeHtml(contact.company || '—')}</td>
+      <td>${escapeHtml(contact.email || '—')}</td>
+      <td>${escapeHtml(contact.status)}</td>
+      <td>${escapeHtml(contact.priority)}</td>
+    </tr>
+  `).join('');
+
+  if (rows.length > 20) {
+    els.csvPreviewBody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td colspan="5">+ ${rows.length - 20} additional contact${rows.length - 20 === 1 ? '' : 's'} not shown</td>
+      </tr>
+    `);
+  }
+
+  els.csvImportErrors.hidden = errors.length === 0;
+  els.csvImportErrors.innerHTML = errors.length
+    ? `<strong>SKIPPED ROWS</strong><br>${errors.slice(0, 12).map(escapeHtml).join('<br>')}${errors.length > 12 ? `<br>+ ${errors.length - 12} more` : ''}`
+    : '';
+  els.confirmCsvImport.disabled = rows.length === 0;
+}
+
+async function handleCsvFileChange(event) {
+  const [file] = event.target.files || [];
+  if (!file) return resetCsvImport();
+  if (file.size > 5 * 1024 * 1024) {
+    resetCsvImport();
+    return showToast('CSV files must be 5 MB or smaller.', 'error');
+  }
+
+  try {
+    const text = await file.text();
+    const parsedRows = parseCsv(text);
+    if (parsedRows.length < 2) throw new Error('The CSV must contain a header row and at least one contact row.');
+
+    const sourceHeaders = parsedRows[0].map((header) => String(header || '').trim());
+    const headers = sourceHeaders.map(resolveCsvHeader);
+    const hasName = headers.includes('name') || headers.includes('firstName') || headers.includes('lastName');
+    if (!hasName) throw new Error('No recognized name column was found. Use name, or first name and last name columns.');
+
+    const contacts = [];
+    const errors = [];
+    parsedRows.slice(1).forEach((values, index) => {
+      if (!values.some((value) => String(value).trim())) return;
+      const result = csvRowToContact(headers, values, index + 2);
+      if (result.error) errors.push(result.error);
+      else contacts.push(result.contact);
+    });
+
+    if (contacts.length > 500) throw new Error('A maximum of 500 valid contacts can be imported at one time.');
+    if (!contacts.length) throw new Error(errors[0] || 'No valid contacts were found in the CSV.');
+
+    state.csvImportRows = contacts;
+    state.csvImportErrors = errors;
+    const recognizedCount = headers.filter(Boolean).length;
+    els.csvFileSummary.textContent = `${file.name} • ${contacts.length} valid row${contacts.length === 1 ? '' : 's'} • ${recognizedCount} recognized column${recognizedCount === 1 ? '' : 's'}`;
+    renderCsvPreview();
+  } catch (err) {
+    resetCsvImport();
+    showToast(err.message, 'error');
+  }
+}
+
+function downloadCsvTemplate() {
+  const content = `${CSV_TEMPLATE_HEADERS.join(',')}\r\n`;
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'rolodex-contact-import-template.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function importCsvContacts() {
+  if (!state.csvImportRows.length) return showToast('Choose a valid CSV file first.', 'error');
+
+  els.confirmCsvImport.disabled = true;
+  els.confirmCsvImport.textContent = 'IMPORTING...';
+
+  try {
+    const result = await apiFetch('/api/contacts/import', {
+      method: 'POST',
+      body: JSON.stringify({
+        contacts: state.csvImportRows,
+        skipDuplicates: els.duplicateBehavior.value === 'skip'
+      })
+    });
+
+    closeModal(els.importModal);
+    const parts = [`${result.imported || 0} imported`];
+    if (result.duplicates) parts.push(`${result.duplicates} duplicate${result.duplicates === 1 ? '' : 's'} skipped`);
+    if (result.invalid) parts.push(`${result.invalid} invalid row${result.invalid === 1 ? '' : 's'} skipped`);
+    showToast(parts.join(' • '), result.invalid && !result.imported && !result.duplicates ? 'error' : 'ok');
+    await loadContacts();
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    els.confirmCsvImport.disabled = state.csvImportRows.length === 0;
+    els.confirmCsvImport.textContent = 'IMPORT CONTACTS';
+  }
+}
+
 function closeAllModals() {
   closeModal(els.contactModal);
   closeModal(els.viewModal);
   closeModal(els.accessModal);
+  closeModal(els.importModal);
 }
 
 function wireEvents() {
@@ -587,7 +960,9 @@ function wireEvents() {
   });
 
   els.navAddContact.addEventListener('click', openCreateModal);
+  els.navImportCsv.addEventListener('click', openImportModal);
   els.addContactBtn.addEventListener('click', openCreateModal);
+  els.importCsvBtn.addEventListener('click', openImportModal);
   els.navRefresh.addEventListener('click', loadContacts);
   els.navAccess.addEventListener('click', openAccessModal);
 
@@ -600,8 +975,13 @@ function wireEvents() {
   els.closeContactModal.addEventListener('click', () => closeModal(els.contactModal));
   els.closeViewModal.addEventListener('click', () => closeModal(els.viewModal));
   els.closeAccessModal.addEventListener('click', () => closeModal(els.accessModal));
+  els.closeImportModal.addEventListener('click', () => closeModal(els.importModal));
   els.cancelContactBtn.addEventListener('click', () => closeModal(els.contactModal));
   els.contactForm.addEventListener('submit', saveContact);
+  els.csvFileInput.addEventListener('change', handleCsvFileChange);
+  els.downloadCsvTemplate.addEventListener('click', downloadCsvTemplate);
+  els.confirmCsvImport.addEventListener('click', importCsvContacts);
+  els.cancelCsvImport.addEventListener('click', () => closeModal(els.importModal));
 
   els.avatarInput.addEventListener('change', handleAvatarChange);
   els.clearAvatarBtn.addEventListener('click', () => {

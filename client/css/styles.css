@@ -660,6 +660,130 @@ h1 {
   border-top: 1px solid var(--line);
 }
 
+
+.profiles-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.import-modal-content { max-width: 920px; }
+
+.import-description {
+  margin-bottom: 18px;
+}
+
+.import-description strong { color: var(--text); }
+
+.import-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.csv-file-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin: 0;
+  border: 1px dashed rgba(0, 153, 255, 0.6);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.csv-file-picker:hover {
+  border-color: var(--accent);
+  background: rgba(0, 153, 255, 0.2);
+}
+
+.csv-file-picker input { display: none; }
+
+.import-file-summary {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.import-duplicate-option { margin-top: 18px; }
+
+.import-preview {
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0d0d0e;
+}
+
+.import-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.import-preview-header h3 {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+}
+
+.import-preview-header p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-table-wrap {
+  max-height: 330px;
+  overflow: auto;
+}
+
+.import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.import-table th,
+.import-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: left;
+  vertical-align: top;
+}
+
+.import-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #151519;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.import-table td {
+  color: var(--text);
+  word-break: break-word;
+}
+
+.import-table tbody tr:last-child td { border-bottom: 0; }
+
+.import-errors {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(220, 38, 38, 0.45);
+  background: rgba(220, 38, 38, 0.08);
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .nav-dropdown {
   position: fixed;
   top: 20px;
@@ -753,6 +877,7 @@ a.nav-item { display: block; text-decoration: none; }
 @media (max-width: 700px) {
   body { padding: 12px; }
   .container { padding-top: 0; }
+  
   .nav-dropdown { top: 12px; left: 12px; }
   .aigox-logo { top: 12px; right: 12px; width: 117px; height: auto; }
   .xodia-logo { width: min(100px, 32vw); }
@@ -776,4 +901,8 @@ a.nav-item { display: block; text-decoration: none; }
   .profile-actions,
   .form-actions,
   .expanded-actions { flex-direction: column; }
+  .profiles-header-actions { width: 100%; }
+  .profiles-header-actions button { flex: 1; min-width: 0; }
+  .import-toolbar { grid-template-columns: 1fr; }
+  .import-table { min-width: 650px; }
 }
